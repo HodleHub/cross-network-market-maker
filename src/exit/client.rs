@@ -326,6 +326,12 @@ fn append_wallet_outputs(
                     .map(str::to_owned)
                     .collect::<Vec<_>>()
             })
+            .or_else(|| {
+                detail
+                    .get("address")
+                    .and_then(Value::as_str)
+                    .map(|address| vec![address.to_owned()])
+            })
             .unwrap_or_default();
 
         for address in addresses {
@@ -339,4 +345,30 @@ fn append_wallet_outputs(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::{WalletTransactionOutput, append_wallet_outputs};
+
+    #[test]
+    fn wallet_output_details_accept_singular_address() {
+        let transaction = json!({
+            "tx_hash": "11".repeat(32),
+            "output_details": [{
+                "output_index": "0",
+                "address": "bcrt1qowned",
+                "is_our_address": true
+            }]
+        });
+        let mut outputs: Vec<WalletTransactionOutput> = Vec::new();
+
+        append_wallet_outputs(&transaction, &mut outputs).expect("wallet output details");
+
+        assert_eq!(outputs.len(), 1);
+        assert_eq!(outputs[0].address, "bcrt1qowned");
+        assert!(outputs[0].is_our_address);
+    }
 }

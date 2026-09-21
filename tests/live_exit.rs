@@ -170,6 +170,11 @@ fn native_exit_recovers_exact_accepted_htlc_and_csv_outputs() -> Result<(), Box<
     }
     wait_for_lnd_height(&exit_client, &bitcoin, close_height)?;
     let owned_scripts = owned_scripts(&exit_client)?;
+
+    if owned_scripts.is_empty() {
+        return Err("Alice LND returned no owned wallet scripts for native exit".into());
+    }
+
     let mut state = ExitProofState::default();
     observe_exit_stages(
         &bitcoin,
