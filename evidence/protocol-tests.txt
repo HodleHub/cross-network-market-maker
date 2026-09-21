@@ -1,0 +1,137 @@
+$ cargo test --locked --offline
+   Compiling cross-network-market-maker v0.1.0 (/private/tmp/cross-network-market-maker)
+    Finished `test` profile [unoptimized] target(s) in 2.07s
+     Running unittests src/lib.rs (target/debug/deps/cross_network_market_maker-fabd72cfa248ea53)
+
+running 9 tests
+test swaps::timing::tests::forward_rejects_the_old_unsafe_delta ... ok
+test swaps::timing::tests::reverse_uses_wall_clock_and_not_cross_chain_heights ... ok
+test exit::client::tests::wallet_output_details_accept_singular_address ... ok
+test lightning::client::tests::canceled_htlc_preserves_accepted_amount_and_expiry ... ok
+test lightning::client::tests::overflowing_htlc_amount_is_rejected ... ok
+test lightning::observation::tests::failed_zero_preimage_is_not_exposed ... ok
+test lightning::observation::tests::succeeded_preimage_is_exposed_only_after_hash_verification ... ok
+test swaps::recovery::tests::recovery_is_encrypted_and_replay_is_immutable ... ok
+test cli::live::tests::observer_reconciles_held_reservation_after_output_settled_state ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/main.rs (target/debug/deps/xmm-b04b24ed67949ab8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/chain_observation.rs (target/debug/deps/chain_observation-35e88eca9e415a4e)
+
+running 2 tests
+test rpc_coin_amount_parses_exact_decimal_and_scientific_values ... ok
+test rpc_coin_amount_rejects_precision_sign_and_overflow_errors ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/chain_primitives.rs (target/debug/deps/chain_primitives-9ce54e848ea644e9)
+
+running 4 tests
+test liquid_refund_builder_uses_absolute_lock_height ... ok
+test liquid_wrong_asset_and_wrong_preimage_are_rejected ... ok
+test bitcoin_claim_witness_is_signed_and_recoverable ... ok
+test liquid_claim_has_explicit_asset_and_separate_fee_output ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/core.rs (target/debug/deps/core-11ff3c6dab3cf735)
+
+running 4 tests
+test route_catalog_has_twenty_and_qualified_initial_routes ... ok
+test signed_quote_binds_intent_and_trusted_deadline_context ... ok
+test recovery_bundle_is_encrypted_immutable_and_reopenable ... ok
+test durable_reservation_and_unknown_state_survive_reopen ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/exit_primitives.rs (target/debug/deps/exit_primitives-f24d00f0b0676ba0)
+
+running 5 tests
+test recovery_accounting_assigns_both_stage_fees ... ok
+test pending_parser_preserves_negative_maturity ... ok
+test close_stream_parser_accepts_first_update_and_rejects_malformed_data ... ok
+test csv_proof_rejects_rbf_disable_bit_and_requires_maturity ... ok
+test timeout_proof_binds_hash_and_paired_output ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ledger_safety.rs (target/debug/deps/ledger_safety-9cb7a3d502f3bc79)
+
+running 4 tests
+test inventory_cannot_be_reserved_in_a_different_asset_or_beyond_capacity ... ok
+test ledger_keeps_large_integer_amounts_exact ... ok
+test consuming_a_reservation_twice_debits_inventory_once ... ok
+test attached_expired_reservation_stays_locked_without_local_swap_evidence ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/live_chain.rs (target/debug/deps/live_chain-a5fff5b1eec7c5e7)
+
+running 2 tests
+test bitcoin_regtest_claim_and_refund_use_real_core ... ignored, requires isolated regtest
+test liquid_regtest_claim_and_refund_use_real_elements ... ignored, requires isolated regtest
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/live_exit.rs (target/debug/deps/live_exit-f748b18903ebb62a)
+
+running 1 test
+test native_exit_recovers_exact_accepted_htlc_and_csv_outputs ... ignored, requires isolated regtest and explicit native-exit opt-in
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/live_forward.rs (target/debug/deps/live_forward-411fc7be5b1103b9)
+
+running 1 test
+test cli_forward_persists_payment_boundary_and_replays_without_repayment ... ignored, requires isolated regtest and two loopback solver peers
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/live_lightning.rs (target/debug/deps/live_lightning-b89c6d495d47d027)
+
+running 1 test
+test lnd_regtest_hold_settle_and_cancel_use_real_nodes ... ignored, requires isolated regtest
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/live_swaps.rs (target/debug/deps/live_swaps-63b503df3999547b)
+
+running 3 tests
+test lnd_rejects_a_wrong_pinned_node_certificate ... ignored, requires isolated regtest
+test test_depix_failed_payment_refunds_after_liquid_timeout ... ignored, requires isolated regtest
+test test_depix_lightning_forward_reverse_and_replay_use_real_nodes ... ignored, requires isolated regtest
+
+test result: ok. 0 passed; 0 failed; 3 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/safety_boundary.rs (target/debug/deps/safety_boundary-d661f29e5726947b)
+
+running 5 tests
+test paid_states_cannot_switch_to_refund_or_retry_payment ... ok
+test rpc_rejects_remote_and_credential_bearing_endpoints ... ok
+test lnd_rejects_insecure_or_remote_endpoints_before_certificate_loading ... ok
+test rpc_debug_omits_authentication_material ... ok
+test cli_rejects_mainnet_before_creating_solver_material ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+     Running tests/solver.rs (target/debug/deps/solver-ab3530b789a6e558)
+
+running 1 test
+test two_independent_http_solvers_verify_and_select_the_lower_fee ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+   Doc-tests cross_network_market_maker
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+[exit code: 0]

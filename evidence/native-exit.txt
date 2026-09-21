@@ -1,0 +1,13 @@
+$ ./scripts/test-exit.sh
+/private/tmp/cross-network-market-maker/runtime/public-fixture.json
+    Finished `test` profile [unoptimized] target(s) in 0.37s
+     Running tests/live_exit.rs (target/debug/deps/live_exit-f748b18903ebb62a)
+
+running 1 test
+test native_exit_recovers_exact_accepted_htlc_and_csv_outputs ... native_exit_proof {"attributable_final_sweep_sats":23456,"commitment":{"txid":"533508ac44fb92d36a7bde87a5d8757a2ee4085b7e062897c330653ec3d2b1fa","vout":2},"final_sweep_fee_sats":135,"htlc_csv":{"recovered_sats":23321,"required_csv":144,"sequence":144,"source_height":10361,"source_txid":"1274164e8b5e5549ef48f335dd8c45c610f2daef9c0021d737c425b0a855201c","source_vout":0,"sweep_height":10505,"txid":"b8e45381bb99d2786c4302c1083f6b05c885f96051b89fe8014f9cc514d80ec6"},"net_recovered_sats":22222,"ordinary_csv":{"recovered_sats":74409,"required_csv":144,"sequence":144,"source_height":10318,"source_txid":"533508ac44fb92d36a7bde87a5d8757a2ee4085b7e062897c330653ec3d2b1fa","source_vout":3,"sweep_height":10462,"txid":"76f4b4452c43eaf4defbafe8198cad8d787d46e04b066b98db3b8494ebed6359"},"payment_hash_hex":"942ce6c245e1440eddf7e4c488d3d5251cd726df4e768c5c3cd67c60495ac181","principal_sats":23456,"timeout":{"amount_sats":23456,"confirmation_height":10361,"lock_time":10360,"paired_vout":0,"sequence":1,"stage_fee_sats":1099,"txid":"1274164e8b5e5549ef48f335dd8c45c610f2daef9c0021d737c425b0a855201c"}}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 137.55s
+
+
+[exit code: 0]

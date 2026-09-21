@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "title": "Rust swaps against real regtest nodes",
+  "command": [
+    "./scripts/test-regtest.sh"
+  ],
+  "source_commit": "7598d0e415d185c6f2bb81b17de30a5257658006",
+  "source_worktree_dirty": true,
+  "started_at_utc": "2026-09-21T03:54:08.139171+00:00",
+  "duration_seconds": 79.003,
+  "exit_code": 0,
+  "transcript": "regtest-swaps.txt",
+  "transcript_sha256": "fc3047936cc6531d13b537059d2b341627fcf026aa31d887b575f5a0c1c0363a",
+  "image_kind": "Rendered actual CLI transcript; not a desktop screenshot"
+}

@@ -77,6 +77,11 @@ replay. Public evidence omits private material.
 embedded URL credentials, query strings, fragments, and redirects. Chain
 observers and broadcasters check the actual node network.
 
+RPC coin amounts accept fixed decimal and scientific notation through exact
+integer scaling. This includes small anchor outputs such as `3.3e-6` BTC.
+Sub-satoshi precision, negative values, malformed numbers, and overflow are
+rejected; amount conversion never rounds through floating point.
+
 Bitcoin and Elements builders use the Rust `bitcoin` and `elements` crates.
 They construct hash/time-locked scripts and sign funding/claim/refund spends.
 The Elements POC uses explicit assets and values, with separate policy-asset

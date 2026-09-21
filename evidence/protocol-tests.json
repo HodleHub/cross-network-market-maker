@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "title": "Rust protocol and recovery checks",
+  "command": [
+    "cargo",
+    "test",
+    "--locked",
+    "--offline"
+  ],
+  "source_commit": "7598d0e415d185c6f2bb81b17de30a5257658006",
+  "source_worktree_dirty": true,
+  "started_at_utc": "2026-09-21T03:54:04.035927+00:00",
+  "duration_seconds": 3.848,
+  "exit_code": 0,
+  "transcript": "protocol-tests.txt",
+  "transcript_sha256": "d43dc81fd6458acbd0237d30628c9f724669d72176d3b65e2b0c0123602b8f97",
+  "image_kind": "Rendered actual CLI transcript; not a desktop screenshot"
+}

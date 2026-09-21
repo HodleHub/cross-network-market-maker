@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "title": "Rust CLI: two makers, settlement and replay",
+  "command": [
+    "./scripts/demo-market-makers.sh"
+  ],
+  "source_commit": "7598d0e415d185c6f2bb81b17de30a5257658006",
+  "source_worktree_dirty": true,
+  "started_at_utc": "2026-09-21T03:55:27.471420+00:00",
+  "duration_seconds": 15.713,
+  "exit_code": 0,
+  "transcript": "market-maker-cli.txt",
+  "transcript_sha256": "0dee86737df94fa2decd54ad26a7920a75bb0ee65f8e1ac65afcdaa2afde9027",
+  "image_kind": "Rendered actual CLI transcript; not a desktop screenshot"
+}

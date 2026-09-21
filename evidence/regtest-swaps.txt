@@ -1,0 +1,48 @@
+$ ./scripts/test-regtest.sh
+/private/tmp/cross-network-market-maker/runtime/public-fixture.json
+    Finished `test` profile [unoptimized] target(s) in 0.34s
+     Running tests/live_chain.rs (target/debug/deps/live_chain-a5fff5b1eec7c5e7)
+
+running 2 tests
+test bitcoin_regtest_claim_and_refund_use_real_core ... bitcoin claim funding=159d1041bb33d08abe50946f65c0ba62c15cd33bd9194ba5135d4d3adee17f4a claim=84fcbabd31dccab89c3f003a1f66456a8622c8178a77a000a02bf267ed007d00
+bitcoin refund funding=5731c8183575dd9dec329546f1cebc01f53000cbff731e9529fd1779969cf3c9 refund=7365f8a797939b8f28969ba9e378968b9f1b4934f324ad6cb5eb10be5662d325
+ok
+test liquid_regtest_claim_and_refund_use_real_elements ... liquid claim funding=d42ba253ecaa33203454d92fc55f33e74883d55609861b5f720c10c3caf91dc6 claim=4badb33a881014ee0f5c2cb3c95195780264ecb3ab5b01d033fb7f5d47e59b35
+liquid refund funding=0e0c389dccbadfc6120c8b6a898f9a4c418a9e55fdf06a8db5d5ba9a0728683d refund=e815a304223d39e1c2a088513546689caf8d003578e6e027ead116bd60116c67
+liquid LBTC payment funding=9d11ad1112c5d787080f0439c180a1246bdf20da8da08e181256ee5653716275 claim=64a76a602cd29e1d5c3c8012a67b612414e83b381c04aa3a609dc1b84cf4bfde
+ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.13s
+
+/private/tmp/cross-network-market-maker/runtime/public-fixture.json
+    Finished `test` profile [unoptimized] target(s) in 0.08s
+     Running tests/live_forward.rs (target/debug/deps/live_forward-411fc7be5b1103b9)
+
+running 1 test
+test cli_forward_persists_payment_boundary_and_replays_without_repayment ... {"session":"cli-forward-1789962857231396000","maker":"maker-b","funding_txid":"4b1b03922df6c860c628c578612225301a273f524be84a8324e8b30c83397b34","claim_txid":"ec5101a9cbe4346797036116c2c55dc99079edb2456bd6f5d36717fffbb8dfb5","replay_same_txids":true,"reservation_state":"CONSUMED"}
+{"hash_commitment":"bed9de5cf0f82afdacb76c8861338381a7f590c935b26e05f165db30f93dd330"}
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.15s
+
+     Running tests/live_lightning.rs (target/debug/deps/live_lightning-b89c6d495d47d027)
+
+running 1 test
+test lnd_regtest_hold_settle_and_cancel_use_real_nodes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 30.25s
+
+     Running tests/live_swaps.rs (target/debug/deps/live_swaps-63b503df3999547b)
+
+running 3 tests
+test lnd_rejects_a_wrong_pinned_node_certificate ... ok
+test test_depix_failed_payment_refunds_after_liquid_timeout ... live_failure_refund funding_txid=1ebd165085f394942c7593fbb8e62b3bf12b014bf340bd7571bb3879025e4641 refund_txid=a788b76df2e0dfca5cfb5b883074e9a2c2b3ac83ffb77991b1726ee08105dca7 asset_id=4fa41f2929d4bf6975a55967d9da5b650b6b9bfddeae4d7b54b04394be328f7f amount_sats=20000 confirmations=1
+ok
+test test_depix_lightning_forward_reverse_and_replay_use_real_nodes ... live_swap direction=forward funding_txid=478879983224cc961fbf5e9e9b43341b43fe37da599dbe32d2261da95d4b2c7a claim_txid=766d8841de93e659df02ca26bfa5d5b8d2c29d3dd61bbc7bdc4880bd377f4d3f hash_lock=5dc11731f4982863f6b88d800bd19e4cb9becdf8173e9c672661a6d63ed7c652 amount_sats=20000 accepted_expiry_height=Some(10360) claim_confirmations=1 preimage_verified=true
+live_swap direction=reverse funding_txid=18eddb33343b7f4445ce9930401d51bd12755b343c0dc5d537a65011866b7617 claim_txid=24efb2a7b8f92d30797a003aca00e874bf0956eef5b349a661a8f9c4243bf77b hash_lock=0b795db44b89543957e6da20ffaafd5df3e2b767b1293fe9fabcd69a2e9ccdf7 amount_sats=20000 accepted_expiry_height=Some(10360) claim_confirmations=1 preimage_verified=true
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 24.15s
+
+
+[exit code: 0]

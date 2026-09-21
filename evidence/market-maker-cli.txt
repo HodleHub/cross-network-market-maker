@@ -1,0 +1,32 @@
+$ ./scripts/demo-market-makers.sh
+{
+  "solver_id": "maker-b",
+  "selected_peer": "127.0.0.1:37772",
+  "fee_lbtc": "500",
+  "reservation_id": "reservation-maker-b-market-maker-demo-Wrdfayw1"
+}
+$ xmm swap forward [prepared session and signed quote]
+{
+  "session_id": "market-maker-demo-Wrdfayw1",
+  "state": "SETTLED",
+  "funding_txid": "7e474d595c94e7f2680796130a88c2531f942bb5a8f69486fb84351996ca4b69",
+  "claim_txid": "f99cb5e1f71afe83db4b3a31d8b50766b37a15a8296e88c267062fcda2d339e3",
+  "accepted_expiry_height": 10360,
+  "preimage_verified": true,
+  "solver_reservation_consumed": true,
+  "replay": false
+}
+$ xmm swap resume [same session and signed quote]
+{
+  "session_id": "market-maker-demo-Wrdfayw1",
+  "state": "SETTLED",
+  "funding_txid": "7e474d595c94e7f2680796130a88c2531f942bb5a8f69486fb84351996ca4b69",
+  "claim_txid": "f99cb5e1f71afe83db4b3a31d8b50766b37a15a8296e88c267062fcda2d339e3",
+  "accepted_expiry_height": 10360,
+  "preimage_verified": true,
+  "solver_reservation_consumed": true,
+  "replay": true
+}
+Private recovery retained at runtime/market-maker-demo-Wrdfayw1
+
+[exit code: 0]
