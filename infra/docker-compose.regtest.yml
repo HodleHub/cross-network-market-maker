@@ -1,0 +1,200 @@
+services:
+  gateway:
+    image: nginx:1.27-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10
+    container_name: cross-network-market-maker-gateway
+    entrypoint: [nginx, -g, "daemon off;"]
+    user: "101:101"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./infra/gateway.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - 127.0.0.1:29443:29443
+      - 127.0.0.1:27051:27051
+      - 127.0.0.1:29081:29081
+      - 127.0.0.1:29082:29082
+      - 127.0.0.1:22009:22009
+      - 127.0.0.1:22010:22010
+    networks:
+      - cross-network-market-maker
+      - cross-network-market-maker-access
+    depends_on:
+      - bitcoin
+      - elements
+      - lnd-alice
+      - lnd-bob
+    mem_limit: 64m
+    cpus: 0.25
+
+  bitcoin:
+    image: lncm/bitcoind:v28.0@sha256:1d335a5adbfac6d66cee20b62b339385819dc75f8cb60c6c5773922cec4c25ef
+    container_name: cross-network-market-maker-bitcoin
+    command:
+      - -regtest
+      - -server=1
+      - -listen=0
+      - -discover=0
+      - -dnsseed=0
+      - -upnp=0
+      - -natpmp=0
+      - -maxconnections=0
+      - -txindex=1
+      - -dbcache=16
+      - -maxmempool=5
+      - -fallbackfee=0.00001000
+      - -rpcbind=0.0.0.0
+      - -datadir=/data/.bitcoin
+      - -rpcallowip=172.30.0.0/16
+      - -rpcuser=cross_network_market_maker
+      - -rpcpassword=cross_network_market_maker_rpc_password
+      - -rpcport=18443
+      - -zmqpubrawblock=tcp://0.0.0.0:28332
+      - -zmqpubrawtx=tcp://0.0.0.0:28333
+    networks:
+      - cross-network-market-maker
+    volumes:
+      - bitcoin-data:/data/.bitcoin
+    mem_limit: 256m
+    cpus: 0.50
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - bitcoin-cli -regtest -datadir=/data/.bitcoin -rpcuser=cross_network_market_maker -rpcpassword=cross_network_market_maker_rpc_password -rpcconnect=127.0.0.1 -rpcport=18443 getblockchaininfo >/dev/null 2>&1
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  elements:
+    build:
+      context: ./infra/elements
+      args:
+        ELEMENTS_VERSION: 23.3.4
+        ELEMENTS_ARCH: aarch64-linux-gnu
+        ELEMENTS_SHA256: ee20cc20302bf7a41a063241f59f17a0a2e4d18479c2fff9cbdbfc6c25919510
+    image: cross-network-market-maker-elements:23.3.4-aarch64
+    container_name: cross-network-market-maker-elements
+    command:
+      - -chain=elementsregtest
+      - -datadir=/data/.elements
+      - -server=1
+      - -listen=0
+      - -discover=0
+      - -dnsseed=0
+      - -upnp=0
+      - -natpmp=0
+      - -maxconnections=0
+      - -txindex=1
+      - -dbcache=16
+      - -maxmempool=5
+      - -fallbackfee=0.00001000
+      - -initialfreecoins=2100000000000000
+      - -anyonecanspendaremine=1
+      - -validatepegin=0
+      - -rpcbind=0.0.0.0
+      - -rpcallowip=172.30.0.0/16
+      - -rpcuser=cross_network_market_maker
+      - -rpcpassword=cross_network_market_maker_elements_rpc_password
+      - -rpcport=7041
+      - -zmqpubrawblock=tcp://0.0.0.0:7042
+      - -zmqpubrawtx=tcp://0.0.0.0:7043
+    networks:
+      - cross-network-market-maker
+    volumes:
+      - elements-data:/data/.elements
+    mem_limit: 256m
+    cpus: 0.50
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - elements-cli -chain=elementsregtest -datadir=/data/.elements -rpcuser=cross_network_market_maker -rpcpassword=cross_network_market_maker_elements_rpc_password -rpcconnect=127.0.0.1 -rpcport=7041 getblockchaininfo >/dev/null 2>&1
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  lnd-alice:
+    image: lightninglabs/lnd:v0.19.3-beta@sha256:b175f136c01ffe01e75eee836273dd15b21a7e2cea2bd316ea98ad3640743aaa
+    container_name: cross-network-market-maker-lnd-alice
+    command:
+      - --bitcoin.active
+      - --bitcoin.regtest
+      - --bitcoin.node=bitcoind
+      - --bitcoind.rpchost=bitcoin:18443
+      - --bitcoind.rpcuser=cross_network_market_maker
+      - --bitcoind.rpcpass=cross_network_market_maker_rpc_password
+      - --bitcoind.zmqpubrawblock=tcp://bitcoin:28332
+      - --bitcoind.zmqpubrawtx=tcp://bitcoin:28333
+      - --rpclisten=0.0.0.0:10009
+      - --restlisten=0.0.0.0:8080
+      - --listen=0.0.0.0:9735
+      - --externalip=lnd-alice:9735
+      - --tlsextradomain=localhost
+      - --tlsextradomain=127.0.0.1
+      - --tlsextradomain=lnd-alice
+      - --protocol.wumbo-channels
+      - --minchansize=20000
+      - --debuglevel=info
+    networks:
+      - cross-network-market-maker
+    volumes:
+      - lnd-alice-data:/root/.lnd
+    mem_limit: 384m
+    cpus: 0.75
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+
+  lnd-bob:
+    image: lightninglabs/lnd:v0.19.3-beta@sha256:b175f136c01ffe01e75eee836273dd15b21a7e2cea2bd316ea98ad3640743aaa
+    container_name: cross-network-market-maker-lnd-bob
+    command:
+      - --bitcoin.active
+      - --bitcoin.regtest
+      - --bitcoin.node=bitcoind
+      - --bitcoind.rpchost=bitcoin:18443
+      - --bitcoind.rpcuser=cross_network_market_maker
+      - --bitcoind.rpcpass=cross_network_market_maker_rpc_password
+      - --bitcoind.zmqpubrawblock=tcp://bitcoin:28332
+      - --bitcoind.zmqpubrawtx=tcp://bitcoin:28333
+      - --rpclisten=0.0.0.0:10009
+      - --restlisten=0.0.0.0:8080
+      - --listen=0.0.0.0:9735
+      - --externalip=lnd-bob:9735
+      - --tlsextradomain=localhost
+      - --tlsextradomain=127.0.0.1
+      - --tlsextradomain=lnd-bob
+      - --protocol.wumbo-channels
+      - --minchansize=20000
+      - --debuglevel=info
+    networks:
+      - cross-network-market-maker
+    volumes:
+      - lnd-bob-data:/root/.lnd
+    mem_limit: 384m
+    cpus: 0.75
+    depends_on:
+      bitcoin:
+        condition: service_healthy
+
+networks:
+  cross-network-market-maker-access:
+    name: cross-network-market-maker-access
+  cross-network-market-maker:
+    name: cross-network-market-maker-net
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+
+volumes:
+  bitcoin-data:
+    name: cross-network-market-maker-bitcoin-data
+  elements-data:
+    name: cross-network-market-maker-elements-data
+  lnd-alice-data:
+    name: cross-network-market-maker-lnd-alice-data
+  lnd-bob-data:
+    name: cross-network-market-maker-lnd-bob-data
