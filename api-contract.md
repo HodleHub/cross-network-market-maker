@@ -122,6 +122,13 @@ transaction creates a different delayed output. These scripts must not be
 treated as interchangeable. Anchor timeout signatures bind corresponding input
 and output indices, which matters when LND batches the transaction.
 
+The counterparty's presigned timeout signature uses `SIGHASH_SINGLE|ANYONECANPAY`.
+The local signature can use `SIGHASH_ALL` to bind the completed transaction.
+The verifier checks the two roles separately; requiring both signatures to use
+the counterparty's type rejects valid LND timeout transactions. See the pinned
+[LND witness construction](https://github.com/lightningnetwork/lnd/blob/v0.19.3-beta/input/script_utils.go#L484)
+and the mixed-signature regression test.
+
 ## Qualification
 
 Run normal protocol tests with `cargo test --locked`. Real-node targets are

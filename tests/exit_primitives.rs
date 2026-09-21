@@ -36,8 +36,8 @@ fn timeout_proof_binds_hash_and_paired_output() {
         .push_opcode(OP_EQUAL)
         .into_script();
     let commitment_script = ScriptBuf::new_p2wsh(&witness_script.wscript_hash());
-    let first_signature = der_signature(1);
-    let second_signature = der_signature(2);
+    let first_signature = der_signature(1, 0x83);
+    let second_signature = der_signature(2, 0x01);
     let timeout = Transaction {
         version: Version::TWO,
         lock_time: LockTime::from_consensus(685),
@@ -76,7 +76,7 @@ fn timeout_proof_binds_hash_and_paired_output() {
     assert_eq!(proof.timeout_output_index, 0);
     assert_eq!(proof.lock_time, 685);
 
-    let candidate_outputs = vec![(5, commitment_script)];
+    let candidate_outputs = vec![(5, commitment_script.clone())];
     let learned = identify_htlc_timeout_by_hash(&IdentifyTimeoutByHashArgs {
         raw_hex: &serialize_hex(&timeout),
         commitment_txid: &commitment_txid.to_string(),
@@ -87,15 +87,57 @@ fn timeout_proof_binds_hash_and_paired_output() {
     .expect("learn timeout paired script");
 
     assert_eq!(learned.timeout_output_script, paired_script);
+
+    let mut invalid_sighash = timeout.clone();
+    invalid_sighash.input[0].witness = Witness::from_slice(&[
+        Vec::new(),
+        der_signature(1, 0x83),
+        der_signature(2, 0x02),
+        Vec::new(),
+        witness_script.as_bytes().to_vec(),
+    ]);
+    assert!(
+        identify_htlc_timeout(&IdentifyTimeoutArgs {
+            raw_hex: &serialize_hex(&invalid_sighash),
+            commitment_txid: &commitment_txid.to_string(),
+            payment_hash,
+            candidate_vouts: &[5],
+            expected_commitment_script: &commitment_script,
+            expected_output_script: &paired_script,
+            expected_amount_sats: 23_456,
+        })
+        .is_err()
+    );
+
+    let mut invalid_der = timeout;
+    invalid_der.input[0].witness = Witness::from_slice(&[
+        Vec::new(),
+        vec![0x30, 0x01, 0x00, 0x83],
+        der_signature(2, 0x01),
+        Vec::new(),
+        witness_script.as_bytes().to_vec(),
+    ]);
+    assert!(
+        identify_htlc_timeout(&IdentifyTimeoutArgs {
+            raw_hex: &serialize_hex(&invalid_der),
+            commitment_txid: &commitment_txid.to_string(),
+            payment_hash,
+            candidate_vouts: &[5],
+            expected_commitment_script: &commitment_script,
+            expected_output_script: &paired_script,
+            expected_amount_sats: 23_456,
+        })
+        .is_err()
+    );
 }
 
-fn der_signature(seed: u8) -> Vec<u8> {
+fn der_signature(seed: u8, sighash_type: u8) -> Vec<u8> {
     let mut signature = vec![0x30, 0x44, 0x02, 0x20];
 
     signature.extend([seed; 32]);
     signature.extend([0x02, 0x20]);
     signature.extend([seed.saturating_add(1); 32]);
-    signature.push(0x83);
+    signature.push(sighash_type);
 
     signature
 }

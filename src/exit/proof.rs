@@ -196,14 +196,35 @@ fn timeout_witness_script(
 }
 
 fn has_single_sighash(witness: &bitcoin::Witness) -> bool {
-    witness.len() == 5
-        && witness.iter().next().is_some_and(|item| item.is_empty())
-        && witness.iter().nth(3).is_some_and(|item| item.is_empty())
-        && witness.iter().skip(1).take(2).all(|signature| {
-            bitcoin::ecdsa::Signature::from_slice(signature).is_ok_and(|parsed| {
-                parsed.sighash_type == bitcoin::EcdsaSighashType::SinglePlusAnyoneCanPay
-            })
-        })
+    if witness.len() != 5 {
+        return false;
+    }
+
+    if !witness.iter().next().is_some_and(|item| item.is_empty())
+        || !witness.iter().nth(3).is_some_and(|item| item.is_empty())
+    {
+        return false;
+    }
+
+    let mut signatures = witness.iter().skip(1).take(2);
+    let Some(counterparty_signature) = signatures.next() else {
+        return false;
+    };
+    let Some(local_signature) = signatures.next() else {
+        return false;
+    };
+
+    let counterparty = bitcoin::ecdsa::Signature::from_slice(counterparty_signature);
+    let local = bitcoin::ecdsa::Signature::from_slice(local_signature);
+
+    counterparty.is_ok_and(|parsed| {
+        parsed.sighash_type == bitcoin::EcdsaSighashType::SinglePlusAnyoneCanPay
+    }) && local.is_ok_and(|parsed| {
+        matches!(
+            parsed.sighash_type,
+            bitcoin::EcdsaSighashType::All | bitcoin::EcdsaSighashType::SinglePlusAnyoneCanPay
+        )
+    })
 }
 
 /// Proves a delayed source output was spent with a valid block based CSV sequence.
