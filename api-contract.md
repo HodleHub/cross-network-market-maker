@@ -108,6 +108,13 @@ follow the transaction's matching output, verify CSV sequence and confirmation
 maturity, and account for final owned outputs and fees. Ark/Bark/Arkade/Spark
 native exits are not enabled by this Lightning proof.
 
+LND's [CloseChannel API](https://lightning.engineering/api-docs/api/lnd/lightning/close-channel/)
+streams status updates. A close request must consume the pending update without
+waiting for the final confirmed-close message, then reconcile uncertainty by
+the selected channel outpoint. A transport failure is not proof that the close
+was rejected. Confirm the actual closing transaction before expecting its
+confirmed force-close state.
+
 The witness and output checks follow the
 [BOLT 3 transaction formats](https://github.com/lightning/bolts/blob/master/03-transactions.md#htlc-timeout-and-htlc-success-transactions):
 the offered-HTLC hash is embedded in its witness script, while the timeout

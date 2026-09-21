@@ -1,5 +1,6 @@
 //! Minimal TLS-pinned LND client for native force-close observation.
 
+use std::io::{BufRead, BufReader, Read};
 use std::time::Duration;
 
 use reqwest::blocking::Client;
@@ -9,8 +10,12 @@ use serde_json::Value;
 use crate::lightning::{LightningNetwork, LightningTip, LndRestConfig};
 
 use super::error::ExitError;
-use super::parser::parse_pending_force_closes;
+use super::parser::{
+    find_pending_close_txid, parse_close_pending_update, parse_pending_force_closes,
+};
 use super::types::{ChannelPoint, ExitChannel, PendingForceClose, WalletTransactionOutput};
+
+const CLOSE_STREAM_MAX_BYTES: u64 = 64 * 1024;
 
 /// Result of requesting a unilateral close, reconciled through pending channels when needed.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -21,6 +26,8 @@ pub struct ForceCloseResult {
     pub response_received: bool,
     /// Whether pending force-close state confirmed the side effect after an unknown response.
     pub reconciled_pending: bool,
+    /// Closing transaction identifier returned by the first close stream update or pending state.
+    pub closing_txid: Option<String>,
 }
 
 /// TLS-pinned LND client used only for native exit operations.
@@ -167,29 +174,79 @@ impl ExitLndClient {
             channel_point.funding_txid, channel_point.funding_vout
         );
 
-        match self.request(Method::DELETE, &path) {
-            Ok(_) => Ok(ForceCloseResult {
+        match self.request_close_stream(&path) {
+            Ok(closing_txid) => Ok(ForceCloseResult {
                 channel_point,
                 response_received: true,
                 reconciled_pending: false,
+                closing_txid: Some(closing_txid),
             }),
             Err(request_error) => {
-                let pending = self.pending_force_closes()?;
-                let reconciled_pending = pending
-                    .iter()
-                    .any(|item| item.channel_point == channel_point);
-
-                if reconciled_pending {
+                let pending = self.request(Method::GET, "/v1/channels/pending")?;
+                if let Some(closing_txid) = find_pending_close_txid(&pending, &channel_point)? {
                     return Ok(ForceCloseResult {
                         channel_point,
                         response_received: false,
                         reconciled_pending: true,
+                        closing_txid: Some(closing_txid),
                     });
                 }
 
                 Err(request_error)
             }
         }
+    }
+
+    fn request_close_stream(&self, path: &str) -> Result<String, ExitError> {
+        let url = self
+            .base_url
+            .join(path)
+            .map_err(|error| ExitError::Request(error.to_string()))?;
+        let response = self
+            .http
+            .request(Method::DELETE, url)
+            .header("Grpc-Metadata-macaroon", &self.macaroon_hex)
+            .timeout(self.timeout)
+            .send()
+            .map_err(|error| ExitError::Request(error.to_string()))?;
+        let status = response.status();
+
+        if !status.is_success() {
+            return Err(ExitError::Request(format!("LND HTTP status {status}")));
+        }
+
+        let mut reader = BufReader::new(response.take(CLOSE_STREAM_MAX_BYTES));
+        let mut line = Vec::new();
+
+        for _ in 0..4 {
+            line.clear();
+            let bytes_read = reader
+                .read_until(b'\n', &mut line)
+                .map_err(|error| ExitError::Request(error.to_string()))?;
+
+            if bytes_read == 0 {
+                break;
+            }
+
+            if line.len() as u64 >= CLOSE_STREAM_MAX_BYTES && !line.ends_with(b"\n") {
+                return Err(ExitError::Request(
+                    "LND close stream update exceeds the size limit".to_owned(),
+                ));
+            }
+
+            if line.iter().all(u8::is_ascii_whitespace) {
+                continue;
+            }
+
+            let payload = serde_json::from_slice::<Value>(&line)
+                .map_err(|error| ExitError::Request(error.to_string()))?;
+
+            return parse_close_pending_update(&payload);
+        }
+
+        Err(ExitError::Request(
+            "LND close stream returned no close_pending update".to_owned(),
+        ))
     }
 
     fn request(&self, method: Method, path: &str) -> Result<Value, ExitError> {

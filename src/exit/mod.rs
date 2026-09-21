@@ -8,7 +8,10 @@ pub mod types;
 
 pub use client::{ExitLndClient, ForceCloseResult};
 pub use error::ExitError;
-pub use parser::{parse_channel_point, parse_exit_channels, parse_pending_force_closes};
+pub use parser::{
+    find_pending_close_txid, parse_channel_point, parse_close_pending_update, parse_exit_channels,
+    parse_pending_force_closes,
+};
 pub use proof::{
     IdentifyCsvSpendArgs, IdentifyTimeoutArgs, IdentifyTimeoutByHashArgs, account_exit_recovery,
     identify_csv_spend, identify_htlc_timeout, identify_htlc_timeout_by_hash,

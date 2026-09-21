@@ -1,3 +1,4 @@
+use base64::Engine;
 use bitcoin::absolute::LockTime;
 use bitcoin::consensus::encode::serialize_hex;
 use bitcoin::hashes::Hash;
@@ -8,7 +9,8 @@ use bitcoin::transaction::Version;
 use bitcoin::{Amount, OutPoint, ScriptBuf, Sequence, Transaction, TxIn, TxOut, Txid, Witness};
 use cross_network_market_maker::exit::{
     IdentifyCsvSpendArgs, IdentifyTimeoutArgs, IdentifyTimeoutByHashArgs, account_exit_recovery,
-    identify_csv_spend, identify_htlc_timeout, identify_htlc_timeout_by_hash,
+    find_pending_close_txid, identify_csv_spend, identify_htlc_timeout,
+    identify_htlc_timeout_by_hash, parse_channel_point, parse_close_pending_update,
     parse_pending_force_closes, validate_csv_sequence,
 };
 use ripemd::{Digest, Ripemd160};
@@ -184,6 +186,41 @@ fn pending_parser_preserves_negative_maturity() {
 
     assert_eq!(parsed[0].blocks_til_maturity, -43);
     assert_eq!(parsed[0].pending_htlcs[0].stage, 2);
+}
+
+#[test]
+fn close_stream_parser_accepts_first_update_and_rejects_malformed_data() {
+    let txid = Txid::from_byte_array([37; 32]);
+    let encoded = base64::engine::general_purpose::STANDARD.encode(txid.to_byte_array());
+    let envelope = json!({
+        "result": {
+            "close_pending": {"txid": encoded}
+        }
+    });
+
+    assert_eq!(
+        parse_close_pending_update(&envelope).expect("close update"),
+        txid.to_string()
+    );
+    assert!(parse_close_pending_update(&json!({"close_pending": {}})).is_err());
+    assert!(
+        parse_close_pending_update(&json!({
+            "close_pending": {"txid": "not-a-txid"}
+        }))
+        .is_err()
+    );
+
+    let channel_point = parse_channel_point(&format!("{txid}:0")).expect("channel point");
+    let pending = json!({
+        "waiting_close_channels": [{
+            "channel": {"channel_point": channel_point.serialized},
+            "closing_txid": txid.to_string()
+        }]
+    });
+    assert_eq!(
+        find_pending_close_txid(&pending, &channel_point).expect("pending close"),
+        Some(txid.to_string())
+    );
 }
 
 #[test]

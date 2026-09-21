@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use base64::Engine;
 use bitcoin::Txid;
+use bitcoin::hashes::Hash;
 use serde_json::Value;
 
 use super::error::ExitError;
@@ -49,6 +50,84 @@ pub fn parse_pending_force_closes(value: &Value) -> Result<Vec<PendingForceClose
     channels.iter().map(parse_pending_channel).collect()
 }
 
+/// Parses the first server-streaming `close_pending` update from LND.
+pub fn parse_close_pending_update(value: &Value) -> Result<String, ExitError> {
+    let update = value
+        .get("close_pending")
+        .or_else(|| {
+            value
+                .get("result")
+                .and_then(|result| result.get("close_pending"))
+        })
+        .ok_or_else(|| ExitError::InvalidData("LND close stream lacks close_pending".to_owned()))?;
+    let txid = required_string(update, "txid")?;
+
+    parse_lnd_txid(txid)
+}
+
+/// Finds a requested channel in any LND pending-close bucket without retrying close.
+pub fn find_pending_close_txid(
+    value: &Value,
+    expected: &ChannelPoint,
+) -> Result<Option<String>, ExitError> {
+    [
+        "pending_force_closing_channels",
+        "waiting_close_channels",
+        "pending_closing_channels",
+    ]
+    .into_iter()
+    .try_fold(None, |found, field| {
+        if found.is_some() {
+            return Ok(found);
+        }
+
+        let Some(entries) = value.get(field).and_then(Value::as_array) else {
+            return Ok(None);
+        };
+
+        entries
+            .iter()
+            .find_map(|entry| pending_entry_txid(entry, expected))
+            .transpose()
+            .map(|txid| txid.or(found))
+    })
+}
+
+fn pending_entry_txid(value: &Value, expected: &ChannelPoint) -> Option<Result<String, ExitError>> {
+    let channel = value.get("channel")?;
+    let serialized = channel.get("channel_point").and_then(Value::as_str)?;
+    let channel_point = match parse_channel_point(serialized) {
+        Ok(value) => value,
+        Err(error) => return Some(Err(error)),
+    };
+
+    if channel_point != *expected {
+        return None;
+    }
+
+    let txid = value
+        .get("closing_txid")
+        .or_else(|| value.get("close_txid"))
+        .and_then(Value::as_str)
+        .ok_or_else(|| ExitError::InvalidData("pending close lacks closing_txid".to_owned()));
+
+    Some(txid.and_then(parse_lnd_txid))
+}
+
+fn parse_lnd_txid(value: &str) -> Result<String, ExitError> {
+    if let Ok(txid) = Txid::from_str(value) {
+        return Ok(txid.to_string());
+    }
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(value)
+        .map_err(|_| ExitError::InvalidData("LND close txid is not hex or base64".to_owned()))?;
+    let txid = Txid::from_slice(&bytes)
+        .map_err(|_| ExitError::InvalidData("LND close txid must contain 32 bytes".to_owned()))?;
+
+    Ok(txid.to_string())
+}
+
 fn parse_channel(value: &Value) -> Result<ExitChannel, ExitError> {
     let channel_point = parse_channel_point(required_string(value, "channel_point")?)?;
     let pending = value
@@ -82,7 +161,7 @@ fn parse_pending_channel(value: &Value) -> Result<PendingForceClose, ExitError> 
 
     Ok(PendingForceClose {
         channel_point,
-        closing_txid: required_string(value, "closing_txid")?.to_owned(),
+        closing_txid: parse_lnd_txid(required_string(value, "closing_txid")?)?,
         limbo_balance_sats: required_unsigned(value, "limbo_balance")?,
         maturity_height: required_signed(value, "maturity_height")?,
         blocks_til_maturity: required_signed(value, "blocks_til_maturity")?,

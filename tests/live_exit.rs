@@ -10,7 +10,7 @@ use std::str::FromStr;
 use std::thread::sleep;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use bitcoin::{Address, Network, ScriptBuf, Transaction};
+use bitcoin::{Address, Network, ScriptBuf, Transaction, Txid};
 use cross_network_market_maker::chain::parse_rpc_coin_amount;
 use cross_network_market_maker::exit::{
     ChannelPoint, CsvSpendProof, ExitChannel, ExitLndClient, ExitRecoveryAccounting,
@@ -147,14 +147,23 @@ fn native_exit_recovers_exact_accepted_htlc_and_csv_outputs() -> Result<(), Box<
 
     stop_recipient()?;
     let mut recipient_guard = RecipientGuard::stopped();
-    let close = exit_client.force_close(channel.channel_point.clone())?;
-    let pending = wait_for_pending_close(&exit_client, &channel.channel_point)?;
-    recovery.closing_txid = Some(pending.closing_txid.clone());
+    let close_result = exit_client.force_close(channel.channel_point.clone())?;
+    let closing_txid = close_result
+        .closing_txid
+        .ok_or("force-close returned no closing transaction id")?;
+    recovery.closing_txid = Some(closing_txid.clone());
     persist_recovery(&recovery_path, &recovery, false)?;
 
     let miner = create_miner(&bitcoin)?;
-    let close_height = confirm_transaction(&bitcoin, &miner, &pending.closing_txid)?;
-    let close_transaction = read_transaction(&bitcoin, &pending.closing_txid)?;
+    let close_height = confirm_transaction(&bitcoin, &miner, &closing_txid)?;
+    let pending = wait_for_pending_close(&exit_client, &channel.channel_point)?;
+
+    if pending.closing_txid != closing_txid {
+        return Err("LND pending close txid differs from the confirmed close".into());
+    }
+
+    let close_transaction = read_transaction(&bitcoin, &closing_txid)?;
+    assert_close_spends_channel(&close_transaction, &channel.channel_point)?;
     let candidates = htlc_candidates(&close_transaction);
     if candidates.is_empty() {
         return Err("force-close commitment has no target HTLC output candidates".into());
@@ -243,7 +252,24 @@ fn native_exit_recovers_exact_accepted_htlc_and_csv_outputs() -> Result<(), Box<
         "net_recovered_sats": accounting.net_recovered_sats,
     });
     println!("native_exit_proof {public_proof}");
-    let _ = close;
+    Ok(())
+}
+
+fn assert_close_spends_channel(
+    transaction: &Transaction,
+    channel_point: &ChannelPoint,
+) -> Result<(), Box<dyn Error>> {
+    let funding_txid = Txid::from_str(&channel_point.funding_txid)?;
+    let spends_funding = transaction.input.iter().any(|input| {
+        input.previous_output.txid == funding_txid
+            && input.previous_output.vout == channel_point.funding_vout
+    });
+
+    if !spends_funding {
+        return Err(
+            "closing transaction does not spend the selected channel funding output".into(),
+        );
+    }
 
     Ok(())
 }
