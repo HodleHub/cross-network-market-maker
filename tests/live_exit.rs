@@ -159,6 +159,7 @@ fn native_exit_recovers_exact_accepted_htlc_and_csv_outputs() -> Result<(), Box<
     if candidates.is_empty() {
         return Err("force-close commitment has no target HTLC output candidates".into());
     }
+    wait_for_lnd_height(&exit_client, &bitcoin, close_height)?;
     let owned_scripts = owned_scripts(&exit_client)?;
     let mut state = ExitProofState::default();
     observe_exit_stages(
@@ -341,6 +342,7 @@ fn observe_exit_stages(
         let block = mine_one(bitcoin, miner)?;
         let height = chain_height(bitcoin)?;
         let transactions = block_transactions(bitcoin, &block)?;
+        wait_for_lnd_height(exit_client, bitcoin, height)?;
         owned = merge_owned_scripts(owned, owned_scripts(exit_client)?);
         transactions.iter().for_each(|transaction| {
             if !state
@@ -675,6 +677,23 @@ fn owned_scripts(client: &ExitLndClient) -> Result<Vec<ScriptBuf>, Box<dyn Error
     Ok(scripts)
 }
 
+fn wait_for_lnd_height(
+    client: &ExitLndClient,
+    bitcoin: &RpcClient,
+    minimum_height: u64,
+) -> Result<(), Box<dyn Error>> {
+    wait_until(OBSERVATION_TIMEOUT, || {
+        let target_height = chain_height(bitcoin).ok()?.max(minimum_height);
+
+        client
+            .get_info()
+            .ok()
+            .filter(|tip| tip.block_height >= target_height)
+            .map(|_| ())
+    })
+    .ok_or_else(|| format!("Alice LND did not sync to Bitcoin height {minimum_height}").into())
+}
+
 fn merge_owned_scripts(mut left: Vec<ScriptBuf>, right: Vec<ScriptBuf>) -> Vec<ScriptBuf> {
     right.into_iter().for_each(|script| {
         if !left.contains(&script) {
@@ -951,11 +970,12 @@ fn run_compose(args: &[&str]) -> Result<Output, Box<dyn Error>> {
 }
 
 fn require_live_exit_flag() -> Result<(), Box<dyn Error>> {
-    let enabled = env::var("XMM_RUN_LIVE_EXIT").as_deref() == Ok("1")
-        || env::var("ATOMIC_SWAP_POC_EXIT_QUALIFIED").as_deref() == Ok("1");
+    let enabled = env::var("XMM_RUN_LIVE_LIGHTNING_EXIT").as_deref() == Ok("1");
 
     if !enabled {
-        return Err("set XMM_RUN_LIVE_EXIT=1 for the explicit native-exit qualification".into());
+        return Err(
+            "set XMM_RUN_LIVE_LIGHTNING_EXIT=1 for the explicit native-exit qualification".into(),
+        );
     }
 
     if env::var("XMM_NETWORK").as_deref().unwrap_or("regtest") != "regtest" {
