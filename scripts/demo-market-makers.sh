@@ -69,6 +69,14 @@ curl --silent --fail http://127.0.0.1:37772/health > /dev/null
   --pinned-key "key-a=${XMM_KEY_A},key-b=${XMM_KEY_B}" --asset-hash "${XMM_TEST_ASSET}" \
   --reserve --out "${XMM_DEMO_DIR}/selected.json" > "${XMM_DEMO_DIR}/rfq.json"
 
+python3 - "${XMM_DEMO_DIR}/selected.json" <<'PY'
+import json
+import sys
+
+quote = json.load(open(sys.argv[1]))
+print(json.dumps({key: quote[key] for key in ('solver_id', 'selected_peer', 'fee_lbtc', 'reservation_id')}, indent=2))
+PY
+
 XMM_SWAP_ARGS=(
   --intent "${XMM_DEMO_DIR}/intent.json" --quote "${XMM_DEMO_DIR}/selected.json"
   --database "${XMM_DEMO_DIR}/client.sqlite" --recovery-key "${XMM_DEMO_DIR}/recovery.key"

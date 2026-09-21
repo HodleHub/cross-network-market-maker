@@ -18,7 +18,11 @@ use crate::core::routes::RouteRegistry;
 use crate::core::storage::SqliteStore;
 
 #[derive(Clone, Debug, Parser)]
-#[command(name = "xmm", version, about = "Regtest decentralized atomic swap POC")]
+#[command(
+    name = "xmm",
+    version,
+    about = "Regtest cross-network market-maker research POC"
+)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: Command,

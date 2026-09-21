@@ -13,6 +13,9 @@ BITCOIN_RPC_USER="cross_network_market_maker"
 BITCOIN_RPC_PASSWORD="cross_network_market_maker_rpc_password"
 ELEMENTS_RPC_USER="cross_network_market_maker"
 ELEMENTS_RPC_PASSWORD="cross_network_market_maker_elements_rpc_password"
+BITCOIN_FAUCET_WALLET="cross_network_market_maker_faucet"
+FAUCET_TOP_UP_SATS="100000000"
+FAUCET_MIN_BALANCE_BTC="0.10000000"
 
 mkdir -p "${CREDENTIALS_DIR}"
 chmod 700 "${RUNTIME_DIR}" "${CREDENTIALS_DIR}"
@@ -209,6 +212,10 @@ bitcoin_cli() {
   compose exec -T bitcoin bitcoin-cli -regtest -datadir=/data/.bitcoin -rpcuser="${BITCOIN_RPC_USER}" -rpcpassword="${BITCOIN_RPC_PASSWORD}" -rpcconnect=127.0.0.1 -rpcport=18443 "$@"
 }
 
+bitcoin_faucet_cli() {
+  bitcoin_cli "-rpcwallet=${BITCOIN_FAUCET_WALLET}" "$@"
+}
+
 elements_cli() {
   compose exec -T elements elements-cli -chain=elementsregtest -datadir=/data/.elements -rpcuser="${ELEMENTS_RPC_USER}" -rpcpassword="${ELEMENTS_RPC_PASSWORD}" -rpcconnect=127.0.0.1 -rpcport=7041 "$@"
 }
@@ -229,6 +236,113 @@ json_optional_value() {
   python3 -c 'import json,sys
 value=json.load(sys.stdin)
 print(value.get(sys.argv[1], ""))' "${name}"
+}
+
+decimal_at_least() {
+  local value="$1"
+  local minimum="$2"
+
+  python3 - "${value}" "${minimum}" <<'PY'
+from decimal import Decimal
+import sys
+
+raise SystemExit(0 if Decimal(sys.argv[1]) >= Decimal(sys.argv[2]) else 1)
+PY
+}
+
+decimal_positive() {
+  local value="$1"
+
+  python3 - "${value}" <<'PY'
+from decimal import Decimal
+import sys
+
+raise SystemExit(0 if Decimal(sys.argv[1]) > Decimal("0") else 1)
+PY
+}
+
+faucet_trusted_balance() {
+  bitcoin_faucet_cli getbalances | python3 -c 'import json,sys
+value=json.load(sys.stdin)
+print(value.get("mine", {}).get("trusted", "0"))'
+}
+
+faucet_pending_balance() {
+  bitcoin_faucet_cli getbalances | python3 -c 'import json,sys
+value=json.load(sys.stdin)
+print(value.get("mine", {}).get("untrusted_pending", "0"))'
+}
+
+ensure_bitcoin_faucet_wallet() {
+  if bitcoin_faucet_cli getwalletinfo >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if bitcoin_cli loadwallet "${BITCOIN_FAUCET_WALLET}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  bitcoin_cli createwallet "${BITCOIN_FAUCET_WALLET}" false false "" false true true false >/dev/null
+}
+
+confirm_bitcoin_faucet_transfer() {
+  local txid="${1:-}"
+  local miner_address
+  local confirmations
+
+  miner_address="$(bitcoin_faucet_cli getnewaddress "cross-network-market-maker-faucet-confirmation" bech32)"
+  bitcoin_cli generatetoaddress 1 "${miner_address}" >/dev/null
+
+  if [[ -n "${txid}" ]]; then
+    confirmations="$(bitcoin_faucet_cli gettransaction "${txid}" | json_value confirmations)"
+
+    if [[ "${confirmations}" -lt 1 ]]; then
+      echo "Bitcoin faucet transfer did not confirm" >&2
+      return 1
+    fi
+  fi
+
+  wait_for_lnd_sync lnd-alice lnd-alice:10009
+  wait_for_lnd_sync lnd-bob lnd-bob:10009
+
+  if ! decimal_at_least "$(faucet_trusted_balance)" "${FAUCET_MIN_BALANCE_BTC}"; then
+    echo "Bitcoin faucet trusted balance is below ${FAUCET_MIN_BALANCE_BTC} BTC" >&2
+    return 1
+  fi
+}
+
+ensure_bitcoin_faucet_balance() {
+  local trusted_balance
+  local pending_balance
+
+  ensure_bitcoin_faucet_wallet
+  trusted_balance="$(faucet_trusted_balance)"
+
+  if decimal_at_least "${trusted_balance}" "${FAUCET_MIN_BALANCE_BTC}"; then
+    return 0
+  fi
+
+  pending_balance="$(faucet_pending_balance)"
+
+  if decimal_positive "${pending_balance}"; then
+    confirm_bitcoin_faucet_transfer
+    return 0
+  fi
+
+  local faucet_address
+  local send_result
+  local txid
+
+  faucet_address="$(bitcoin_faucet_cli getnewaddress "cross-network-market-maker-faucet-top-up" bech32)"
+  send_result="$(lnd_value lnd-alice lnd-alice:10009 sendcoins --addr="${faucet_address}" --amt="${FAUCET_TOP_UP_SATS}" --sat_per_vbyte=1 --min_confs=1 --force)"
+  txid="$(printf '%s' "${send_result}" | json_value txid)"
+
+  if [[ -z "${txid}" ]]; then
+    echo "Alice LND did not return a Bitcoin faucet transfer id" >&2
+    return 1
+  fi
+
+  confirm_bitcoin_faucet_transfer "${txid}"
 }
 
 wait_for_lnd_sync() {
@@ -410,6 +524,7 @@ if [[ -f "${PUBLIC_FIXTURE}" ]]; then
   existing_policy_asset_id="$(json_value elements.policyAssetId < "${PUBLIC_FIXTURE}")"
   existing_elements_address="$(elements_cli -rpcwallet=cross_network_market_maker getnewaddress)"
   ensure_explicit_liquidity "${existing_test_asset_id}" "${existing_policy_asset_id}" "${existing_elements_address}"
+  ensure_bitcoin_faucet_balance
   ensure_bitcoin_tip
   wait_for_lnd_sync lnd-alice lnd-alice:10009
   wait_for_lnd_sync lnd-bob lnd-bob:10009
@@ -439,6 +554,7 @@ bitcoin_cli generatetoaddress 101 "${bob_address}" >/dev/null
 
 wait_for_lnd_sync lnd-alice lnd-alice:10009
 wait_for_lnd_sync lnd-bob lnd-bob:10009
+ensure_bitcoin_faucet_balance
 
 compose exec -T lnd-alice lncli --network=regtest --rpcserver=lnd-alice:10009 connect "${bob_pubkey}@lnd-bob:9735" >/dev/null 2>&1 || true
 
@@ -492,6 +608,7 @@ fixture = {
     "bitcoin": {
         "rpcUrl": "http://127.0.0.1:29443",
         "rpcUser": "cross_network_market_maker",
+        "faucetWallet": "cross_network_market_maker_faucet",
     },
     "elements": {
         "rpcUrl": "http://127.0.0.1:27051",

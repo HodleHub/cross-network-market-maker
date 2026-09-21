@@ -3,7 +3,7 @@ name = "cross-network-market-maker"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.94"
-description = "Regtest-only decentralized atomic intent and market-maker POC"
+description = "Native Rust regtest cross-network market-maker and atomic-swap research POC"
 publish = false
 
 [lib]

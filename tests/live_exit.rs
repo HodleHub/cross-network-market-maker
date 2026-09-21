@@ -69,6 +69,7 @@ struct ExitRecoveryBundle {
     channel_point: Option<String>,
     closing_txid: Option<String>,
     timeout_txid: Option<String>,
+    timeout_output_vout: Option<u32>,
     ordinary_sweep_txid: Option<String>,
     htlc_sweep_txid: Option<String>,
 }
@@ -174,21 +175,73 @@ fn native_exit_recovers_exact_accepted_htlc_and_csv_outputs() -> Result<(), Box<
         accepted_expiry_height,
     )?;
     let accounting = finalize_exit_proof(&bitcoin, &pending, &state, EXIT_AMOUNT_SATS)?;
+    let timeout_proof = state
+        .timeout_proof
+        .as_ref()
+        .ok_or("missing timeout proof after finalization")?;
+    let timeout_height = state
+        .timeout_height
+        .ok_or("missing timeout confirmation height after finalization")?;
+    let ordinary_proof = state
+        .ordinary_proof
+        .as_ref()
+        .ok_or("missing ordinary CSV proof after finalization")?;
+    let htlc_proof = state
+        .htlc_proof
+        .as_ref()
+        .ok_or("missing HTLC CSV proof after finalization")?;
     recovery.timeout_txid = state.timeout_txid.clone();
+    recovery.timeout_output_vout = state
+        .timeout_proof
+        .as_ref()
+        .map(|proof| proof.timeout_output_index as u32);
     recovery.ordinary_sweep_txid = state.ordinary_sweep_txid.clone();
     recovery.htlc_sweep_txid = state.htlc_sweep_txid.clone();
     persist_recovery(&recovery_path, &recovery, false)?;
     restore_recipient()?;
     recipient_guard.restored();
 
-    println!(
-        "native exit close={} timeout={} ordinary_sweep={} htlc_sweep={} net_recovered_sats={}",
-        pending.closing_txid,
-        state.timeout_txid.as_deref().unwrap_or("missing"),
-        state.ordinary_sweep_txid.as_deref().unwrap_or("missing"),
-        state.htlc_sweep_txid.as_deref().unwrap_or("missing"),
-        accounting.net_recovered_sats,
-    );
+    let public_proof = json!({
+        "payment_hash_hex": hex::encode(material.hash_commitment),
+        "principal_sats": accounting.principal_sats,
+        "commitment": {
+            "txid": pending.closing_txid,
+            "vout": timeout_proof.commitment_vout,
+        },
+        "timeout": {
+            "txid": timeout_proof.timeout_txid,
+            "paired_vout": timeout_proof.timeout_output_index,
+            "confirmation_height": timeout_height,
+            "amount_sats": timeout_proof.timeout_amount_sats,
+            "lock_time": timeout_proof.lock_time,
+            "sequence": timeout_proof.sequence,
+            "stage_fee_sats": accounting.timeout_stage_fee_sats,
+        },
+        "ordinary_csv": {
+            "txid": ordinary_proof.sweep_txid,
+            "source_txid": ordinary_proof.source_txid,
+            "source_vout": ordinary_proof.source_vout,
+            "required_csv": ordinary_proof.required_csv,
+            "source_height": ordinary_proof.source_height,
+            "sweep_height": ordinary_proof.sweep_height,
+            "recovered_sats": ordinary_proof.recovered_sats,
+            "sequence": ordinary_proof.sequence,
+        },
+        "htlc_csv": {
+            "txid": htlc_proof.sweep_txid,
+            "source_txid": htlc_proof.source_txid,
+            "source_vout": htlc_proof.source_vout,
+            "required_csv": htlc_proof.required_csv,
+            "source_height": htlc_proof.source_height,
+            "sweep_height": htlc_proof.sweep_height,
+            "recovered_sats": htlc_proof.recovered_sats,
+            "sequence": htlc_proof.sequence,
+        },
+        "final_sweep_fee_sats": accounting.final_sweep_fee_sats,
+        "attributable_final_sweep_sats": accounting.attributable_final_sweep_sats,
+        "net_recovered_sats": accounting.net_recovered_sats,
+    });
+    println!("native_exit_proof {public_proof}");
     let _ = close;
 
     Ok(())
@@ -813,6 +866,7 @@ fn new_recovery_bundle(
         channel_point: None,
         closing_txid: None,
         timeout_txid: None,
+        timeout_output_vout: None,
         ordinary_sweep_txid: None,
         htlc_sweep_txid: None,
     };

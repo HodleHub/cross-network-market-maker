@@ -90,15 +90,21 @@ fn bitcoin_regtest_claim_and_refund_use_real_core() {
         "XMM_BITCOIN_RPC_PASSWORD",
         BITCOIN_RPC_PASSWORD,
     );
+    let faucet = wallet_rpc(
+        BITCOIN_RPC_URL,
+        "cross_network_market_maker_faucet",
+        "XMM_BITCOIN_RPC_PASSWORD",
+        BITCOIN_RPC_PASSWORD,
+    );
 
     create_wallet(&miner, &miner_name);
     let miner_address = new_bitcoin_address(&miner);
-    mine_bitcoin(&miner, &miner_address, 101);
     let wallet_key = SecretKey::new(&mut OsRng);
     let wallet_address = bitcoin_key_address(&wallet_key);
     let wallet_script = p2wpkh_script(&wallet_key);
     let source = fund_bitcoin_key(
         &rpc,
+        &faucet,
         &miner,
         &miner_address,
         &wallet_address,
@@ -172,6 +178,7 @@ fn bitcoin_regtest_claim_and_refund_use_real_core() {
     println!("bitcoin claim funding={funding_txid} claim={claim_txid}");
     let refund_source = fund_bitcoin_key(
         &rpc,
+        &faucet,
         &miner,
         &miner_address,
         &wallet_address,
@@ -745,15 +752,16 @@ fn p2wpkh_script(key: &SecretKey) -> ScriptBuf {
 
 fn fund_bitcoin_key(
     rpc: &RpcClient,
+    funding_wallet: &RpcClient,
     miner: &RpcClient,
     miner_address: &str,
     recipient_address: &str,
     recipient_script: &ScriptBuf,
 ) -> BitcoinUtxo {
-    let txid: String = miner
+    let txid: String = funding_wallet
         .call(
             "sendtoaddress",
-            &[json!(recipient_address), json!(0.02_f64)],
+            &[json!(recipient_address), json!("0.02000000")],
         )
         .expect("fund Rust Bitcoin key");
     mine_bitcoin(miner, miner_address, 1);
