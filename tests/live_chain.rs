@@ -28,6 +28,8 @@ const RPC_USER: &str = "cross_network_market_maker";
 const BITCOIN_RPC_PASSWORD: &str = "cross_network_market_maker_rpc_password";
 const ELEMENTS_RPC_PASSWORD: &str = "cross_network_market_maker_elements_rpc_password";
 const MIN_CONFIRMATIONS: u32 = 1;
+const MIN_FEE_INPUT_SATS: u64 = 2_000;
+const REFUND_DELAY_BLOCKS: u64 = 8;
 
 #[derive(Clone, Debug, Deserialize)]
 struct ChainInfo {
@@ -218,7 +220,10 @@ fn liquid_regtest_claim_and_refund_use_real_elements() {
     prepare_liquid_explicit_outputs(&rpc, &wallet, test_asset, fee_asset, 20_000);
     let (payment_input, payment_key) =
         liquid_wallet_utxo(&wallet, &test_asset).expect("TEST-DEPIX wallet UTXO");
-    let fee_inputs = liquid_wallet_utxos(&wallet, &fee_asset);
+    let fee_inputs = liquid_wallet_utxos(&wallet, &fee_asset)
+        .into_iter()
+        .filter(|entry| entry.amount_sats >= MIN_FEE_INPUT_SATS)
+        .collect::<Vec<_>>();
     assert!(
         fee_inputs.len() >= 2,
         "explicit LBTC preparation needs two fee UTXOs"
@@ -550,11 +555,10 @@ fn run_bitcoin_refund(
     wallet_key: &SecretKey,
     source: &BitcoinUtxo,
 ) {
-    let tip: ChainInfo = rpc.call("getblockchaininfo", &[]).expect("Bitcoin tip");
     let claim_key = SecretKey::new(&mut OsRng);
     let refund_key = SecretKey::new(&mut OsRng);
     let preimage: [u8; 32] = rand::random();
-    let contract = bitcoin_contract(rpc, &claim_key, &refund_key, preimage, tip.blocks + 8);
+    let contract = bitcoin_contract(rpc, &claim_key, &refund_key, preimage, REFUND_DELAY_BLOCKS);
     let funding = build_bitcoin_funding_transaction(&BitcoinFundingArgs {
         input: source.clone(),
         contract: contract.clone(),
