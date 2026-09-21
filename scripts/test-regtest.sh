@@ -26,8 +26,11 @@ cd "${XMM_ROOT}"
 
 XMM_NETWORK=regtest ./scripts/bootstrap-regtest.sh
 
+cargo test --locked --test live_chain -- --ignored --test-threads=1 --nocapture
+
+XMM_NETWORK=regtest ./scripts/bootstrap-regtest.sh
+
 cargo test --locked \
-  --test live_chain \
   --test live_lightning \
   --test live_swaps \
   --test live_forward \
