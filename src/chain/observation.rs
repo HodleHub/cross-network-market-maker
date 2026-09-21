@@ -448,41 +448,128 @@ fn parse_coin_amount(value: &Value) -> Result<u64, ChainError> {
 }
 
 fn parse_decimal_sats(value: &str) -> Result<u64, ChainError> {
-    if value.is_empty() || value.starts_with('-') || value.contains('e') || value.contains('E') {
-        return Err(ChainError::Validation(
-            "RPC amount must be a non-negative fixed decimal".to_owned(),
-        ));
-    }
+    let (mantissa, exponent) = match value.find(['e', 'E']) {
+        Some(index) => (
+            &value[..index],
+            parse_decimal_exponent(&value[index + 1..])?,
+        ),
+        None => (value, 0),
+    };
+    let (whole, fractional) = mantissa.split_once('.').unwrap_or((mantissa, ""));
 
-    let mut parts = value.split('.');
-    let whole = parts.next().unwrap_or_default();
-    let fractional = parts.next().unwrap_or_default();
-
-    if parts.next().is_some()
-        || whole.is_empty()
+    if whole.is_empty()
         || !whole.chars().all(|character| character.is_ascii_digit())
-        || !fractional
-            .chars()
-            .all(|character| character.is_ascii_digit())
-        || fractional.len() > 8
+        || (mantissa.contains('.')
+            && (fractional.is_empty()
+                || !fractional
+                    .chars()
+                    .all(|character| character.is_ascii_digit())))
     {
         return Err(ChainError::Validation(
-            "RPC amount must contain at most 8 decimal places".to_owned(),
+            "RPC amount must be a valid non-negative decimal".to_owned(),
         ));
     }
 
-    let whole_sats = whole
-        .parse::<u64>()
-        .map_err(|_| ChainError::Validation("RPC amount exceeds u64".to_owned()))?
-        .checked_mul(100_000_000)
-        .ok_or_else(|| ChainError::Validation("RPC amount exceeds u64".to_owned()))?;
-    let fractional_sats = format!("{fractional:0<8}")
-        .parse::<u64>()
-        .map_err(|_| ChainError::Validation("RPC amount fractional part is invalid".to_owned()))?;
+    let mut digits = String::with_capacity(whole.len() + fractional.len());
+    digits.push_str(whole);
+    digits.push_str(fractional);
+    let significant = digits.trim_start_matches('0');
 
-    whole_sats
-        .checked_add(fractional_sats)
-        .ok_or_else(|| ChainError::Validation("RPC amount exceeds u64".to_owned()))
+    if significant.is_empty() {
+        return Ok(0);
+    }
+
+    let fractional_digits = i128::try_from(fractional.len())
+        .map_err(|_| ChainError::Validation("RPC amount has too many decimal places".to_owned()))?;
+    let shift = exponent
+        .checked_sub(fractional_digits)
+        .and_then(|value| value.checked_add(8))
+        .ok_or_else(|| ChainError::Validation("RPC amount exceeds supported range".to_owned()))?;
+
+    scale_decimal_digits(significant, shift)
+}
+
+fn parse_decimal_exponent(value: &str) -> Result<i128, ChainError> {
+    if value.is_empty() {
+        return Err(ChainError::Validation(
+            "RPC amount exponent is invalid".to_owned(),
+        ));
+    }
+
+    let (negative, digits) = match value.as_bytes().first() {
+        Some(b'+') => (false, &value[1..]),
+        Some(b'-') => (true, &value[1..]),
+        _ => (false, value),
+    };
+
+    if digits.is_empty() || !digits.chars().all(|character| character.is_ascii_digit()) {
+        return Err(ChainError::Validation(
+            "RPC amount exponent is invalid".to_owned(),
+        ));
+    }
+
+    let magnitude = digits.bytes().try_fold(0_i128, |current, byte| {
+        current
+            .checked_mul(10)
+            .and_then(|value| value.checked_add(i128::from(byte - b'0')))
+    });
+    let magnitude = magnitude.ok_or_else(|| {
+        ChainError::Validation("RPC amount exponent exceeds supported range".to_owned())
+    })?;
+
+    Ok(if negative { -magnitude } else { magnitude })
+}
+
+fn scale_decimal_digits(digits: &str, shift: i128) -> Result<u64, ChainError> {
+    if shift >= 0 {
+        let append = usize::try_from(shift)
+            .map_err(|_| ChainError::Validation("RPC amount exceeds u64".to_owned()))?;
+        let length = digits
+            .len()
+            .checked_add(append)
+            .ok_or_else(|| ChainError::Validation("RPC amount exceeds u64".to_owned()))?;
+
+        if length > 20 {
+            return Err(ChainError::Validation("RPC amount exceeds u64".to_owned()));
+        }
+
+        let mut scaled = String::with_capacity(length);
+        scaled.push_str(digits);
+        scaled.extend(std::iter::repeat_n('0', append));
+
+        return scaled
+            .parse::<u64>()
+            .map_err(|_| ChainError::Validation("RPC amount exceeds u64".to_owned()));
+    }
+
+    let division = usize::try_from(
+        shift
+            .checked_neg()
+            .ok_or_else(|| ChainError::Validation("RPC amount is below one satoshi".to_owned()))?,
+    )
+    .map_err(|_| ChainError::Validation("RPC amount is below one satoshi".to_owned()))?;
+
+    if division >= digits.len() {
+        return Err(ChainError::Validation(
+            "RPC amount is below one satoshi".to_owned(),
+        ));
+    }
+
+    let (whole, remainder) = digits.split_at(digits.len() - division);
+
+    if !remainder.bytes().all(|byte| byte == b'0') {
+        return Err(ChainError::Validation(
+            "RPC amount has sub-satoshi precision".to_owned(),
+        ));
+    }
+
+    if whole.len() > 20 {
+        return Err(ChainError::Validation("RPC amount exceeds u64".to_owned()));
+    }
+
+    whole
+        .parse::<u64>()
+        .map_err(|_| ChainError::Validation("RPC amount exceeds u64".to_owned()))
 }
 
 fn decode_hex(value: &str, label: &str) -> Result<Vec<u8>, ChainError> {
